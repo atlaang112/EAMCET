@@ -290,7 +290,7 @@ def api_get_paper(paper_id):
 @admin_bp.route("/api/paper/<paper_id>", methods=["PATCH"])
 @admin_required
 def api_update_paper(paper_id):
-    data = request.json
+    data = request.json or {}
     name = data.get("name", "").strip()
     subject = data.get("subject", "").strip()
     duration = data.get("duration_minutes")
@@ -298,10 +298,16 @@ def api_update_paper(paper_id):
         return jsonify({"ok": False, "error": "All fields required"}), 400
     db = get_db()
     cur = db.cursor()
-    cur.execute("""
-        UPDATE papers SET name=%s, subject=%s, duration_minutes=%s WHERE id=%s
-    """, (name, subject, int(duration), paper_id))
-    db.commit()
+    try:
+        cur.execute("""
+            UPDATE papers SET name=%s, subject=%s, duration_minutes=%s WHERE id=%s
+        """, (name, subject, int(duration), paper_id))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        cur.close()
+        db.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
     cur.close()
     db.close()
     return jsonify({"ok": True})
@@ -312,8 +318,22 @@ def api_update_paper(paper_id):
 def api_delete_paper(paper_id):
     db = get_db()
     cur = db.cursor()
-    cur.execute("DELETE FROM papers WHERE id=%s", (paper_id,))
-    db.commit()
+    try:
+        # Delete in dependency order to avoid FK constraint issues
+        cur.execute("""
+            DELETE FROM result_answers WHERE result_id IN (
+                SELECT id FROM results WHERE paper_id=%s
+            )
+        """, (paper_id,))
+        cur.execute("DELETE FROM results WHERE paper_id=%s", (paper_id,))
+        cur.execute("DELETE FROM questions WHERE paper_id=%s", (paper_id,))
+        cur.execute("DELETE FROM papers WHERE id=%s", (paper_id,))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        cur.close()
+        db.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
     cur.close()
     db.close()
     return jsonify({"ok": True})
