@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — EAMCET Portal</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+    .action-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 28px 20px;
+      box-shadow: var(--shadow);
+      text-align: center;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform 0.2s, box-shadow 0.2s;
+      border-top: 4px solid var(--accent);
+    }
+    .action-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+    .action-card .icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .action-card h3 { margin-bottom: 6px; }
+    .action-card p { font-size: 0.85rem; color: var(--muted); }
+    .action-card.green { border-color: var(--green); }
+    .action-card.orange { border-color: var(--orange); }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/admin/dashboard">🛡️ EAMCET Admin</a>
+    <div class="navbar-links">
+      <a href="/admin/dashboard" class="active">Dashboard</a>
+      <a href="/admin/upload">Upload Paper</a>
+      <a href="/admin/papers">Manage Papers</a>
+      <a href="/admin/results">View Results</a>
+      <a href="/admin/logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-content container">
+    <h1 style="margin-bottom:6px">Admin Dashboard</h1>
+    <p style="color:var(--muted);margin-bottom:24px">Overview of the EAMCET Practice Portal</p>
+
+    <div class="stat-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-num" id="s-students">—</div><div class="stat-label">Registered Students</div></div>
+      <div class="stat-card green"><div class="stat-num" id="s-papers">—</div><div class="stat-label">Question Papers</div></div>
+      <div class="stat-card orange"><div class="stat-num" id="s-attempts">—</div><div class="stat-label">Total Attempts</div></div>
+      <div class="stat-card red"><div class="stat-num" id="s-avg">—</div><div class="stat-label">Average Score (%)</div></div>
+    </div>
+
+    <h2 style="margin-bottom:14px">Quick Actions</h2>
+    <div class="action-grid">
+      <a class="action-card green" href="/admin/upload">
+        <div class="icon">📂</div>
+        <h3>Upload Questions</h3>
+        <p>Upload a CSV file to add or update a question paper</p>
+      </a>
+      <a class="action-card" href="/admin/results">
+        <div class="icon">📊</div>
+        <h3>View Results</h3>
+        <p>Browse all student test results and detailed answer sheets</p>
+      </a>
+      <a class="action-card" href="/admin/papers" style="border-color:#8b5cf6">
+        <div class="icon">📋</div>
+        <h3>Manage Papers</h3>
+        <p>View, edit metadata or delete existing question papers</p>
+      </a>
+      <a class="action-card orange" href="/">
+        <div class="icon">🎓</div>
+        <h3>Student Portal</h3>
+        <p>Visit the student-facing practice test portal</p>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    async function loadStats() {
+      const res = await fetch("/admin/api/stats");
+      const data = await res.json();
+      if (!data.ok) return;
+      document.getElementById("s-students").textContent = data.total_students;
+      document.getElementById("s-papers").textContent = data.total_papers;
+      document.getElementById("s-attempts").textContent = data.total_attempts;
+      document.getElementById("s-avg").textContent = data.avg_score + "%";
+    }
+    loadStats();
+  </script>
+</body>
+</html>

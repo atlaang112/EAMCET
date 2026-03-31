@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Results — EAMCET Admin</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filters input, .filters select {
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      background: white;
+    }
+    .filters input:focus, .filters select:focus { border-color: var(--accent-light); }
+    .pct-high { color: var(--green); font-weight: 700; }
+    .pct-mid { color: var(--orange); font-weight: 700; }
+    .pct-low { color: var(--red); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/admin/dashboard">🛡️ EAMCET Admin</a>
+    <div class="navbar-links">
+      <a href="/admin/dashboard">Dashboard</a>
+      <a href="/admin/upload">Upload Paper</a>
+      <a href="/admin/results" class="active">View Results</a>
+      <a href="/admin/logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-content container">
+    <h1 style="margin-bottom:6px">📊 Student Results</h1>
+    <p style="color:var(--muted);margin-bottom:20px">All test attempts across all students</p>
+
+    <div class="filters">
+      <input type="text" id="search-student" placeholder="🔍 Search student..." oninput="filterResults()">
+      <select id="filter-subject" onchange="filterResults()">
+        <option value="">All Subjects</option>
+      </select>
+      <span id="result-count" style="color:var(--muted);font-size:0.85rem;margin-left:auto"></span>
+    </div>
+
+    <div class="table-wrapper" id="results-container">
+      <div class="loader">⏳ Loading results...</div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal" id="detail-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="modal-title">Result Detail</h2>
+        <button class="modal-close" onclick="closeModal()">✖</button>
+      </div>
+      <div id="detail-summary" style="margin-bottom:20px"></div>
+      <div id="detail-container"></div>
+    </div>
+  </div>
+
+  <script>
+    let allResults = [];
+
+    async function loadResults() {
+      const res = await fetch("/admin/api/results");
+      const data = await res.json();
+
+      if (!data.ok) {
+        document.getElementById("results-container").innerHTML =
+          '<div class="empty-state"><div class="icon">❌</div><p>Failed to load results</p></div>';
+        return;
+      }
+
+      allResults = data.results;
+
+      const subjects = [...new Set(allResults.map(r => r.subject))];
+      const sel = document.getElementById("filter-subject");
+      subjects.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        sel.appendChild(opt);
+      });
+
+      renderResults(allResults);
+    }
+
+    function filterResults() {
+      const search = document.getElementById("search-student").value.toLowerCase();
+      const subject = document.getElementById("filter-subject").value;
+
+      const filtered = allResults.filter(r => {
+        const matchStudent = r.username.toLowerCase().includes(search) ||
+                             r.paper_name.toLowerCase().includes(search);
+        const matchSubject = !subject || r.subject === subject;
+        return matchStudent && matchSubject;
+      });
+      renderResults(filtered);
+    }
+
+    function renderResults(results) {
+      const container = document.getElementById("results-container");
+      document.getElementById("result-count").textContent = `${results.length} result${results.length !== 1 ? "s" : ""}`;
+
+      if (results.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No results found</p></div>';
+        return;
+      }
+
+      let html = `<table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Paper</th>
+            <th>Subject</th>
+            <th>✅ Correct</th>
+            <th>❌ Wrong</th>
+            <th>— Skipped</th>
+            <th>Score</th>
+            <th>Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      results.forEach(r => {
+        const pctClass = r.percentage >= 70 ? "pct-high" : r.percentage >= 40 ? "pct-mid" : "pct-low";
+        html += `
+          <tr>
+            <td><strong>${r.username}</strong></td>
+            <td>${r.paper_name}</td>
+            <td><span class="badge badge-blue">${r.subject}</span></td>
+            <td style="text-align:center">${r.correct}</td>
+            <td style="text-align:center">${r.wrong}</td>
+            <td style="text-align:center">${r.skipped}</td>
+            <td class="${pctClass}" style="text-align:center">${r.percentage}%</td>
+            <td style="white-space:nowrap;font-size:0.8rem">${r.datetime}</td>
+            <td>
+              <button class="btn btn-primary btn-sm" onclick="openDetail(${r.id})">View</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteResult(${r.id}, this)">Delete</button>
+            </td>
+          </tr>`;
+      });
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    async function openDetail(resultId) {
+      const modal = document.getElementById("detail-modal");
+      modal.classList.add("open");
+      document.getElementById("detail-summary").innerHTML = '<div class="loader">⏳ Loading...</div>';
+      document.getElementById("detail-container").innerHTML = "";
+
+      const res = await fetch(`/admin/api/result/${resultId}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        document.getElementById("detail-summary").innerHTML =
+          '<div class="alert alert-error">❌ Failed to load detail</div>';
+        return;
+      }
+
+      const r = data.result;
+      document.getElementById("modal-title").textContent = `${r.username} — ${r.paper_name}`;
+
+      const pctClass = r.percentage >= 70 ? "pct-high" : r.percentage >= 40 ? "pct-mid" : "pct-low";
+      document.getElementById("detail-summary").innerHTML = `
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-num">${r.correct}</div><div class="stat-label">Correct</div></div>
+          <div class="stat-card red"><div class="stat-num">${r.wrong}</div><div class="stat-label">Wrong</div></div>
+          <div class="stat-card orange"><div class="stat-num">${r.skipped}</div><div class="stat-label">Skipped</div></div>
+          <div class="stat-card green"><div class="stat-num ${pctClass}">${r.percentage}%</div><div class="stat-label">Score</div></div>
+        </div>
+        <p style="font-size:0.85rem;color:var(--muted)">Subject: ${r.subject} &nbsp;|&nbsp; Date: ${r.datetime}</p>
+      `;
+
+      let answersHtml = "<hr style='margin:16px 0'><h3 style='margin-bottom:12px'>Answer Sheet</h3>";
+      r.answers.forEach(a => {
+        const opts = ["A", "B", "C", "D"];
+        const correctLabel = opts[parseInt(a.correct_answer)] || a.correct_answer;
+        const studentLabel = a.student_answer !== null ? (opts[parseInt(a.student_answer)] || a.student_answer) : null;
+        const statusClass = a.status === "correct" ? "correct-ans" : a.status === "wrong" ? "student-ans" : "skipped-ans";
+        answersHtml += `
+          <div class="qbox">
+            <p class="q-text">Q${a.question_no}: ${a.question_text}</p>
+            <p class="q-opt">A) ${a.option_a} &nbsp; B) ${a.option_b} &nbsp; C) ${a.option_c} &nbsp; D) ${a.option_d}</p>
+            <p class="correct-ans">✅ Correct: Option ${correctLabel}</p>
+            <p class="${statusClass}">
+              ${a.status === "skipped" ? "— Skipped" : `🧑 Student: Option ${studentLabel}`}
+            </p>
+          </div>`;
+      });
+
+      document.getElementById("detail-container").innerHTML = answersHtml;
+    }
+
+    function closeModal() {
+      document.getElementById("detail-modal").classList.remove("open");
+    }
+
+    async function deleteResult(resultId, btn) {
+      if (!confirm("Delete this result permanently?")) return;
+      btn.disabled = true;
+      btn.textContent = "...";
+
+      const res = await fetch(`/admin/api/delete_result/${resultId}`, { method: "DELETE" });
+      const data = await res.json();
+
+      if (data.ok) {
+        allResults = allResults.filter(r => r.id !== resultId);
+        filterResults();
+      } else {
+        alert("Failed to delete result");
+        btn.disabled = false;
+        btn.textContent = "Delete";
+      }
+    }
+
+    document.getElementById("detail-modal").addEventListener("click", function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    loadResults();
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: eamcet-portal
+    runtime: python
+    pythonVersion: "3.11.9"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python init_db.py && gunicorn wsgi:app --workers 2 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://eapcet_db_user:KoxiSFpBhCMFByqVYavpYZq6XpNdv9Pg@dpg-d7578o9aae7s73bsmqo0-a/eapcet_db
+      - key: SECRET_KEY
+        value: eamcet_super_secret_key_render_2026_xK9#mP2
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: Admin@Eamcet2026

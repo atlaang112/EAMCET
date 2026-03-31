@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login — EAMCET Portal</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .login-wrap { width: 100%; max-width: 400px; padding: 20px; }
+    .login-header { text-align: center; margin-bottom: 28px; }
+    .login-header .icon { font-size: 3rem; margin-bottom: 10px; }
+    .login-header h1 { color: var(--navy); font-size: 1.6rem; }
+    .login-header p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+    .card { box-shadow: var(--shadow-lg); }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-header">
+      <div class="icon">🛡️</div>
+      <h1>Admin Panel</h1>
+      <p>EAMCET Practice Portal</p>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Admin Username</label>
+        <input type="text" id="username" class="form-control" placeholder="Enter admin username" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Enter password">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="doLogin()">Login to Admin Panel</button>
+      <div id="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+    async function doLogin() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const msg = document.getElementById("msg");
+
+      if (!username || !password) {
+        msg.innerHTML = '<div class="alert alert-error">Please fill in all fields.</div>';
+        return;
+      }
+
+      const res = await fetch("/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        window.location.href = "/admin/dashboard";
+      } else {
+        msg.innerHTML = `<div class="alert alert-error">❌ ${data.error}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Papers — EAMCET Admin</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .papers-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+    .papers-table th { background: var(--accent); color: white; padding: 12px 16px; text-align: left; font-size: 0.85rem; letter-spacing: 0.04em; }
+    .papers-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: middle; }
+    .papers-table tr:last-child td { border-bottom: none; }
+    .papers-table tr:hover td { background: #f8fafc; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .btn-sm { padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+    .btn-edit { background: #fef3c7; color: #92400e; }
+    .btn-edit:hover { background: #fde68a; }
+    .btn-del { background: #fee2e2; color: #991b1b; }
+    .btn-del:hover { background: #fecaca; }
+    .btn-view { background: #ede9fe; color: #5b21b6; }
+    .btn-view:hover { background: #ddd6fe; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: white; border-radius: 12px; padding: 28px; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal h2 { margin-bottom: 20px; font-size: 1.1rem; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+    /* Questions drawer */
+    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; justify-content: flex-end; }
+    .drawer-overlay.active { display: flex; }
+    .drawer { background: white; width: 100%; max-width: 640px; height: 100vh; overflow-y: auto; padding: 28px; box-shadow: -4px 0 30px rgba(0,0,0,0.15); }
+    .drawer h2 { margin-bottom: 4px; }
+    .drawer-close { float: right; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); }
+    .q-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .q-card .q-header { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+    .q-card .q-text { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; }
+    .q-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.82rem; }
+    .q-opt { padding: 4px 8px; border-radius: 4px; background: white; border: 1px solid var(--border); }
+    .q-opt.correct { background: #dcfce7; border-color: #86efac; font-weight: 700; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/admin/dashboard">🛡️ EAMCET Admin</a>
+    <div class="navbar-links">
+      <a href="/admin/dashboard">Dashboard</a>
+      <a href="/admin/upload">Upload Paper</a>
+      <a href="/admin/papers" class="active">Manage Papers</a>
+      <a href="/admin/results">View Results</a>
+      <a href="/admin/logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-content container">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <h1 style="margin-bottom:4px">📋 Manage Papers</h1>
+        <p style="color:var(--muted)">View, edit metadata, or delete question papers</p>
+      </div>
+      <a href="/admin/upload" class="btn btn-primary">+ Upload New Paper</a>
+    </div>
+
+    <div id="papers-container">
+      <p style="color:var(--muted);margin-top:30px">Loading papers...</p>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <h2>✏️ Edit Paper</h2>
+      <input type="hidden" id="edit-paper-id">
+      <div class="form-group">
+        <label class="form-label">Paper Name</label>
+        <input type="text" id="edit-name" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subject</label>
+        <input type="text" id="edit-subject" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Duration (minutes)</label>
+        <input type="number" id="edit-duration" class="form-control" min="1">
+      </div>
+      <div id="edit-msg"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeEditModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="del-modal">
+    <div class="modal">
+      <h2>🗑️ Delete Paper</h2>
+      <input type="hidden" id="del-paper-id">
+      <p>Are you sure you want to delete <strong id="del-paper-name"></strong>?</p>
+      <p style="color:#dc2626;font-size:0.85rem;margin-top:8px">⚠️ This will also delete all questions and student results for this paper. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeDelModal()">Cancel</button>
+        <button class="btn" style="background:#dc2626;color:white" onclick="confirmDelete()">Yes, Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions Drawer -->
+  <div class="drawer-overlay" id="questions-drawer">
+    <div class="drawer">
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      <h2 id="drawer-title">Questions</h2>
+      <p id="drawer-sub" style="color:var(--muted);margin-bottom:20px;font-size:0.85rem"></p>
+      <div id="drawer-content"></div>
+    </div>
+  </div>
+
+  <script>
+    const optLabels = ["A", "B", "C", "D"];
+
+    async function loadPapers() {
+      const res = await fetch("/admin/api/papers");
+      const data = await res.json();
+      const container = document.getElementById("papers-container");
+
+      if (!data.ok || data.papers.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No papers uploaded yet.</p><a href="/admin/upload" class="btn btn-primary" style="margin-top:12px">Upload First Paper</a></div>`;
+        return;
+      }
+
+      let html = `<table class="papers-table">
+        <thead><tr>
+          <th>Paper ID</th><th>Name</th><th>Subject</th><th>Questions</th><th>Duration</th><th>Date</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+      for (const p of data.papers) {
+        html += `<tr>
+          <td><code style="font-size:0.8rem">${p.id}</code></td>
+          <td><strong>${p.name}</strong></td>
+          <td><span class="badge badge-blue">${p.subject}</span></td>
+          <td><span class="badge badge-green">${p.question_count} Qs</span></td>
+          <td>${p.duration_minutes} min</td>
+          <td style="color:var(--muted);font-size:0.82rem">${p.created_at}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn-sm btn-view" onclick="viewQuestions('${p.id}', '${p.name}')">👁 View</button>
+            <button class="btn-sm btn-edit" onclick="openEdit('${p.id}', \`${p.name.replace(/`/g, "\\`")}\`, \`${p.subject}\`, ${p.duration_minutes})">✏️ Edit</button>
+            <button class="btn-sm btn-del" onclick="openDelete('${p.id}', \`${p.name.replace(/`/g, "\\`")}\`)">🗑️ Delete</button>
+          </td>
+        </tr>`;
+      }
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
+
+    function openEdit(id, name, subject, duration) {
+      document.getElementById("edit-paper-id").value = id;
+      document.getElementById("edit-name").value = name;
+      document.getElementById("edit-subject").value = subject;
+      document.getElementById("edit-duration").value = duration;
+      document.getElementById("edit-msg").innerHTML = "";
+      document.getElementById("edit-modal").classList.add("active");
+    }
+
+    function closeEditModal() {
+      document.getElementById("edit-modal").classList.remove("active");
+    }
+
+    async function saveEdit() {
+      const id = document.getElementById("edit-paper-id").value;
+      const name = document.getElementById("edit-name").value.trim();
+      const subject = document.getElementById("edit-subject").value.trim();
+      const duration = document.getElementById("edit-duration").value;
+      const msg = document.getElementById("edit-msg");
+
+      if (!name || !subject || !duration) {
+        msg.innerHTML = '<div class="alert alert-error" style="margin-top:10px">❌ All fields are required.</div>';
+        return;
+      }
+
+      const res = await fetch(`/admin/api/paper/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, subject, duration_minutes: parseInt(duration) })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        closeEditModal();
+        loadPapers();
+      } else {
+        msg.innerHTML = `<div class="alert alert-error" style="margin-top:10px">❌ ${data.error}</div>`;
+      }
+    }
+
+    function openDelete(id, name) {
+      document.getElementById("del-paper-id").value = id;
+      document.getElementById("del-paper-name").textContent = name;
+      document.getElementById("del-modal").classList.add("active");
+    }
+
+    function closeDelModal() {
+      document.getElementById("del-modal").classList.remove("active");
+    }
+
+    async function confirmDelete() {
+      const id = document.getElementById("del-paper-id").value;
+      const res = await fetch(`/admin/api/paper/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        closeDelModal();
+        loadPapers();
+      }
+    }
+
+    async function viewQuestions(paperId, paperName) {
+      document.getElementById("drawer-title").textContent = paperName;
+      document.getElementById("drawer-sub").textContent = "Loading questions...";
+      document.getElementById("drawer-content").innerHTML = "";
+      document.getElementById("questions-drawer").classList.add("active");
+
+      const res = await fetch(`/admin/api/paper/${paperId}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        document.getElementById("drawer-content").innerHTML = "<p>Failed to load questions.</p>";
+        return;
+      }
+
+      const qs = data.paper.questions;
+      document.getElementById("drawer-sub").textContent = `${qs.length} questions · ${data.paper.subject} · ${data.paper.duration_minutes} min`;
+
+      let html = "";
+      for (const q of qs) {
+        const opts = [q.option_a, q.option_b, q.option_c, q.option_d];
+        html += `<div class="q-card">
+          <div class="q-header">
+            <span>Q${q.qno}</span>
+            <span>${q.difficulty}</span>
+          </div>
+          <div class="q-text">${q.question_text}</div>
+          <div class="q-opts">
+            ${opts.map((o, i) => `<div class="q-opt ${i === q.correct_option ? 'correct' : ''}">${optLabels[i]}. ${o}</div>`).join("")}
+          </div>
+        </div>`;
+      }
+      document.getElementById("drawer-content").innerHTML = html;
+    }
+
+    function closeDrawer() {
+      document.getElementById("questions-drawer").classList.remove("active");
+    }
+
+    document.getElementById("edit-modal").addEventListener("click", function(e) {
+      if (e.target === this) closeEditModal();
+    });
+    document.getElementById("del-modal").addEventListener("click", function(e) {
+      if (e.target === this) closeDelModal();
+    });
+    document.getElementById("questions-drawer").addEventListener("click", function(e) {
+      if (e.target === this) closeDrawer();
+    });
+
+    loadPapers();
+  </script>
+</body>
+</html>

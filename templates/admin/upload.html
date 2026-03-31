@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Paper — EAMCET Admin</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .upload-wrap { max-width: 560px; margin: 0 auto; }
+    .csv-format {
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 20px;
+      border: 1px solid var(--border);
+    }
+    .file-drop {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .file-drop:hover, .file-drop.drag { border-color: var(--accent); background: #eff6ff; }
+    .file-drop .icon { font-size: 2rem; margin-bottom: 8px; }
+    .file-drop input { display: none; }
+    #file-name { margin-top: 8px; font-size: 0.85rem; color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/admin/dashboard">🛡️ EAMCET Admin</a>
+    <div class="navbar-links">
+      <a href="/admin/dashboard">Dashboard</a>
+      <a href="/admin/upload" class="active">Upload Paper</a>
+      <a href="/admin/papers">Manage Papers</a>
+      <a href="/admin/results">View Results</a>
+      <a href="/admin/logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-content container">
+    <div class="upload-wrap">
+      <h1 style="margin-bottom:6px">📂 Upload Question Paper</h1>
+      <p style="color:var(--muted);margin-bottom:24px">Upload a CSV file to add or replace a question paper</p>
+
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">Paper ID</label>
+          <input type="text" id="paper_id" class="form-control" placeholder="e.g. matrices-02">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paper Name</label>
+          <input type="text" id="paper_name" class="form-control" placeholder="e.g. Matrices Test 2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Subject</label>
+          <input type="text" id="subject" class="form-control" placeholder="e.g. Maths 1A">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration (minutes)</label>
+          <input type="number" id="duration_minutes" class="form-control" placeholder="e.g. 60" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">CSV File</label>
+          <div class="file-drop" id="drop-zone" onclick="document.getElementById('csvfile').click()">
+            <div class="icon">📄</div>
+            <div>Click to select or drag & drop your CSV</div>
+            <div id="file-name">No file selected</div>
+            <input type="file" id="csvfile" accept=".csv">
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="uploadCSV()">Upload Paper</button>
+        <div id="msg"></div>
+      </div>
+
+      <div class="csv-format">
+        <strong>Required CSV Columns:</strong><br>
+        qno, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty<br><br>
+        <strong>correct_option:</strong> 0=A, 1=B, 2=C, 3=D<br>
+        <strong>difficulty:</strong> vvery-easy | very-easy | medium | hard
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("csvfile");
+    const dropZone = document.getElementById("drop-zone");
+
+    fileInput.addEventListener("change", () => {
+      document.getElementById("file-name").textContent = fileInput.files[0]?.name || "No file selected";
+    });
+
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("drag");
+      fileInput.files = e.dataTransfer.files;
+      document.getElementById("file-name").textContent = fileInput.files[0]?.name || "No file";
+    });
+
+    async function uploadCSV() {
+      const msg = document.getElementById("msg");
+      const paperId = document.getElementById("paper_id").value.trim();
+      const paperName = document.getElementById("paper_name").value.trim();
+      const subject = document.getElementById("subject").value.trim();
+      const duration = document.getElementById("duration_minutes").value.trim();
+
+      if (!paperId || !paperName || !subject || !duration) {
+        msg.innerHTML = '<div class="alert alert-error">❌ Please fill in all fields.</div>';
+        return;
+      }
+      if (!fileInput.files.length) {
+        msg.innerHTML = '<div class="alert alert-error">❌ Please select a CSV file.</div>';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+      formData.append("paper_id", paperId);
+      formData.append("paper_name", paperName);
+      formData.append("subject", subject);
+      formData.append("duration_minutes", duration);
+
+      msg.innerHTML = '<div class="alert alert-info">⏳ Uploading...</div>';
+
+      const res = await fetch("/admin/api/upload_csv", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (data.ok) {
+        msg.innerHTML = `
+          <div class="alert alert-success">
+            ✅ Uploaded Successfully!<br>
+            <strong>Paper:</strong> ${data.paper_name} &nbsp;|&nbsp;
+            <strong>Subject:</strong> ${data.subject} &nbsp;|&nbsp;
+            <strong>Questions:</strong> ${data.questions_added} &nbsp;|&nbsp;
+            <strong>Duration:</strong> ${data.duration_minutes} mins
+          </div>`;
+      } else {
+        msg.innerHTML = `<div class="alert alert-error">❌ ${data.error}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
