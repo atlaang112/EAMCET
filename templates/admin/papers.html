@@ -22,14 +22,12 @@
     .btn-view { background: #ede9fe; color: #5b21b6; }
     .btn-view:hover { background: #ddd6fe; }
 
-    /* Modal */
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
     .modal-overlay.active { display: flex; }
     .modal { background: white; border-radius: 12px; padding: 28px; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
     .modal h2 { margin-bottom: 20px; font-size: 1.1rem; }
     .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
 
-    /* Questions drawer */
     .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; justify-content: flex-end; }
     .drawer-overlay.active { display: flex; }
     .drawer { background: white; width: 100%; max-width: 640px; height: 100vh; overflow-y: auto; padding: 28px; box-shadow: -4px 0 30px rgba(0,0,0,0.15); }
@@ -65,7 +63,6 @@
       </div>
       <a href="/admin/upload" class="btn btn-primary">+ Upload New Paper</a>
     </div>
-
     <div id="papers-container">
       <p style="color:var(--muted);margin-top:30px">Loading papers...</p>
     </div>
@@ -123,6 +120,9 @@
   <script>
     const optLabels = ["A", "B", "C", "D"];
 
+    // Store papers data keyed by id for safe access
+    const papersMap = {};
+
     async function loadPapers() {
       const res = await fetch("/admin/api/papers");
       const data = await res.json();
@@ -133,36 +133,67 @@
         return;
       }
 
+      // Store in map
+      for (const p of data.papers) {
+        papersMap[p.id] = p;
+      }
+
       let html = `<table class="papers-table">
         <thead><tr>
           <th>Paper ID</th><th>Name</th><th>Subject</th><th>Questions</th><th>Duration</th><th>Date</th><th>Actions</th>
         </tr></thead><tbody>`;
 
       for (const p of data.papers) {
+        const eid = CSS.escape(p.id);
         html += `<tr>
-          <td><code style="font-size:0.8rem">${p.id}</code></td>
-          <td><strong>${p.name}</strong></td>
-          <td><span class="badge badge-blue">${p.subject}</span></td>
+          <td><code style="font-size:0.8rem">${escHtml(p.id)}</code></td>
+          <td><strong>${escHtml(p.name)}</strong></td>
+          <td><span class="badge badge-blue">${escHtml(p.subject)}</span></td>
           <td><span class="badge badge-green">${p.question_count} Qs</span></td>
           <td>${p.duration_minutes} min</td>
           <td style="color:var(--muted);font-size:0.82rem">${p.created_at}</td>
           <td style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn-sm btn-view" onclick="viewQuestions('${p.id}', '${p.name}')">👁 View</button>
-            <button class="btn-sm btn-edit" onclick="openEdit('${p.id}', \`${p.name.replace(/`/g, "\\`")}\`, \`${p.subject}\`, ${p.duration_minutes})">✏️ Edit</button>
-            <button class="btn-sm btn-del" onclick="openDelete('${p.id}', \`${p.name.replace(/`/g, "\\`")}\`)">🗑️ Delete</button>
+            <button class="btn-sm btn-view" data-id="${escAttr(p.id)}">👁 View</button>
+            <button class="btn-sm btn-edit" data-id="${escAttr(p.id)}">✏️ Edit</button>
+            <button class="btn-sm btn-del"  data-id="${escAttr(p.id)}">🗑️ Delete</button>
           </td>
         </tr>`;
       }
 
       html += `</tbody></table>`;
       container.innerHTML = html;
+
+      // Attach events after render
+      container.querySelectorAll(".btn-view").forEach(btn => {
+        btn.addEventListener("click", () => viewQuestions(btn.dataset.id));
+      });
+      container.querySelectorAll(".btn-edit").forEach(btn => {
+        btn.addEventListener("click", () => openEdit(btn.dataset.id));
+      });
+      container.querySelectorAll(".btn-del").forEach(btn => {
+        btn.addEventListener("click", () => openDelete(btn.dataset.id));
+      });
     }
 
-    function openEdit(id, name, subject, duration) {
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function escAttr(s) {
+      return String(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function openEdit(id) {
+      const p = papersMap[id];
+      if (!p) return;
       document.getElementById("edit-paper-id").value = id;
-      document.getElementById("edit-name").value = name;
-      document.getElementById("edit-subject").value = subject;
-      document.getElementById("edit-duration").value = duration;
+      document.getElementById("edit-name").value = p.name;
+      document.getElementById("edit-subject").value = p.subject;
+      document.getElementById("edit-duration").value = p.duration_minutes;
       document.getElementById("edit-msg").innerHTML = "";
       document.getElementById("edit-modal").classList.add("active");
     }
@@ -183,24 +214,29 @@
         return;
       }
 
-      const res = await fetch(`/admin/api/paper/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, subject, duration_minutes: parseInt(duration) })
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        closeEditModal();
-        loadPapers();
-      } else {
-        msg.innerHTML = `<div class="alert alert-error" style="margin-top:10px">❌ ${data.error}</div>`;
+      try {
+        const res = await fetch(`/admin/api/paper/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, subject, duration_minutes: parseInt(duration) })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          closeEditModal();
+          loadPapers();
+        } else {
+          msg.innerHTML = `<div class="alert alert-error" style="margin-top:10px">❌ ${escHtml(data.error)}</div>`;
+        }
+      } catch (e) {
+        msg.innerHTML = `<div class="alert alert-error" style="margin-top:10px">❌ Network error. Please try again.</div>`;
       }
     }
 
-    function openDelete(id, name) {
+    function openDelete(id) {
+      const p = papersMap[id];
+      if (!p) return;
       document.getElementById("del-paper-id").value = id;
-      document.getElementById("del-paper-name").textContent = name;
+      document.getElementById("del-paper-name").textContent = p.name;
       document.getElementById("del-modal").classList.add("active");
     }
 
@@ -210,46 +246,59 @@
 
     async function confirmDelete() {
       const id = document.getElementById("del-paper-id").value;
-      const res = await fetch(`/admin/api/paper/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.ok) {
-        closeDelModal();
-        loadPapers();
+      try {
+        const res = await fetch(`/admin/api/paper/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.ok) {
+          delete papersMap[id];
+          closeDelModal();
+          loadPapers();
+        } else {
+          alert("Delete failed: " + (data.error || "Unknown error"));
+        }
+      } catch (e) {
+        alert("Network error. Please try again.");
       }
     }
 
-    async function viewQuestions(paperId, paperName) {
-      document.getElementById("drawer-title").textContent = paperName;
+    async function viewQuestions(paperId) {
+      const p = papersMap[paperId];
+      document.getElementById("drawer-title").textContent = p ? p.name : paperId;
       document.getElementById("drawer-sub").textContent = "Loading questions...";
       document.getElementById("drawer-content").innerHTML = "";
       document.getElementById("questions-drawer").classList.add("active");
 
-      const res = await fetch(`/admin/api/paper/${paperId}`);
-      const data = await res.json();
+      try {
+        const res = await fetch(`/admin/api/paper/${encodeURIComponent(paperId)}`);
+        const data = await res.json();
 
-      if (!data.ok) {
-        document.getElementById("drawer-content").innerHTML = "<p>Failed to load questions.</p>";
-        return;
+        if (!data.ok) {
+          document.getElementById("drawer-content").innerHTML = "<p>Failed to load questions.</p>";
+          return;
+        }
+
+        const qs = data.paper.questions;
+        document.getElementById("drawer-sub").textContent =
+          `${qs.length} questions · ${escHtml(data.paper.subject)} · ${data.paper.duration_minutes} min`;
+
+        let html = "";
+        for (const q of qs) {
+          const opts = [q.option_a, q.option_b, q.option_c, q.option_d];
+          html += `<div class="q-card">
+            <div class="q-header">
+              <span>Q${q.qno}</span>
+              <span>${escHtml(q.difficulty)}</span>
+            </div>
+            <div class="q-text">${escHtml(q.question_text)}</div>
+            <div class="q-opts">
+              ${opts.map((o, i) => `<div class="q-opt ${i === q.correct_option ? "correct" : ""}">${optLabels[i]}. ${escHtml(o)}</div>`).join("")}
+            </div>
+          </div>`;
+        }
+        document.getElementById("drawer-content").innerHTML = html;
+      } catch (e) {
+        document.getElementById("drawer-content").innerHTML = "<p>Network error loading questions.</p>";
       }
-
-      const qs = data.paper.questions;
-      document.getElementById("drawer-sub").textContent = `${qs.length} questions · ${data.paper.subject} · ${data.paper.duration_minutes} min`;
-
-      let html = "";
-      for (const q of qs) {
-        const opts = [q.option_a, q.option_b, q.option_c, q.option_d];
-        html += `<div class="q-card">
-          <div class="q-header">
-            <span>Q${q.qno}</span>
-            <span>${q.difficulty}</span>
-          </div>
-          <div class="q-text">${q.question_text}</div>
-          <div class="q-opts">
-            ${opts.map((o, i) => `<div class="q-opt ${i === q.correct_option ? 'correct' : ''}">${optLabels[i]}. ${o}</div>`).join("")}
-          </div>
-        </div>`;
-      }
-      document.getElementById("drawer-content").innerHTML = html;
     }
 
     function closeDrawer() {
