@@ -89,7 +89,7 @@ def api_paper(paper_id):
     paper = dict(paper)
 
     cur.execute("""
-        SELECT qno, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty
+        SELECT qno, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty, solution
         FROM questions
         WHERE paper_id=%s
         ORDER BY qno ASC
@@ -101,7 +101,8 @@ def api_paper(paper_id):
             "text": q["question_text"],
             "opts": [q["option_a"], q["option_b"], q["option_c"], q["option_d"]],
             "ans": q["correct_option"],
-            "diff": q["difficulty"]
+            "diff": q["difficulty"],
+            "solution": q["solution"] or ""
         }
         for q in qs
     ]

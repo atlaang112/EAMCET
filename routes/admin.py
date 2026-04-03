@@ -114,10 +114,11 @@ def upload_csv():
     cur.execute("DELETE FROM questions WHERE paper_id=%s", (paper_id,))
 
     for row in question_rows:
+        solution = row.get("solution", "").strip() if row.get("solution") else None
         cur.execute("""
             INSERT INTO questions
-            (paper_id, qno, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (paper_id, qno, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty, solution)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             paper_id,
             int(row["qno"]),
@@ -127,7 +128,8 @@ def upload_csv():
             row["option_c"].strip(),
             row["option_d"].strip(),
             int(row["correct_option"]),
-            row["difficulty"].strip()
+            row["difficulty"].strip(),
+            solution
         ))
 
     db.commit()

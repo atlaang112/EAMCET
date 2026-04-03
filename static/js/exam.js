@@ -240,6 +240,9 @@ function showResultPage({ correct, wrong, skipped, total, percentage, answers })
 
   buildAnswerSheet(answers);
   showPage("result");
+
+  const sheet = document.getElementById("answer-sheet");
+  sheet.style.display = "block";
 }
 
 function showAnswerSheet() {
@@ -247,25 +250,79 @@ function showAnswerSheet() {
   sheet.style.display = sheet.style.display === "none" ? "block" : "none";
 }
 
+function toggleSolution(idx) {
+  const el = document.getElementById(`solution-body-${idx}`);
+  const btn = document.getElementById(`solution-btn-${idx}`);
+  if (!el) return;
+  const isOpen = el.style.display !== "none";
+  el.style.display = isOpen ? "none" : "block";
+  btn.textContent = isOpen ? "💡 View Solution" : "🔼 Hide Solution";
+  if (!isOpen) renderMath(el);
+}
+
 function buildAnswerSheet(answers) {
   const questions = examState.paper.questions;
   const el = document.getElementById("answer-sheet-content");
+
   el.innerHTML = answers.map((a, i) => {
     const q = questions[i];
-    const statusClass = a.status === "correct" ? "correct-result" : a.status === "wrong" ? "wrong-result" : "skip-result";
-    const statusIcon = a.status === "correct" ? "✅" : a.status === "wrong" ? "❌" : "—";
-    const yourOpt = a.yours !== null ? `Option ${OPTS[a.yours]} — ${decodeHTML(q.opts[a.yours])}` : "Skipped";
+    const isCorrect = a.status === "correct";
+    const isWrong = a.status === "wrong";
+    const isSkipped = a.status === "skipped";
+
+    const statusClass = isCorrect ? "correct-result" : isWrong ? "wrong-result" : "skip-result";
+    const statusIcon = isCorrect ? "✅" : isWrong ? "❌" : "—";
+    const statusLabel = isCorrect ? "Correct" : isWrong ? "Wrong" : "Skipped";
+    const marksLabel = isCorrect ? "2/2" : isWrong ? "0/2" : "0/2";
+
+    const opts = q.opts.map((opt, oi) => {
+      let cls = "rv-option";
+      let icon = "";
+      if (oi === q.ans) {
+        cls += " rv-correct";
+        icon = `<span class="rv-tick">✓</span>`;
+      } else if (a.yours === oi && !isCorrect) {
+        cls += " rv-wrong";
+        icon = `<span class="rv-cross">✗</span>`;
+      }
+      return `<div class="${cls}">
+        <span class="rv-opt-label">${OPTS[oi]}</span>
+        <span class="rv-opt-text">${decodeHTML(opt)}</span>
+        ${icon}
+      </div>`;
+    }).join("");
+
+    const hasSolution = q.solution && q.solution.trim().length > 0;
+    const solutionBlock = hasSolution ? `
+      <div class="solution-wrap">
+        <button class="solution-toggle-btn" id="solution-btn-${i}" onclick="toggleSolution(${i})">💡 View Solution</button>
+        <div class="solution-body" id="solution-body-${i}" style="display:none">
+          <div class="solution-content">${decodeHTML(q.solution)}</div>
+        </div>
+      </div>` : "";
+
+    const metaRow = `
+      <div class="rv-meta">
+        <span>Status <strong>${statusLabel}</strong></span>
+        <span>Mark obtained <strong>${marksLabel}</strong></span>
+        <span>Level <strong>${q.diff}</strong></span>
+        ${a.yours !== null ? `<span>Your answer <strong>${OPTS[a.yours]}</strong></span>` : ""}
+        <span>Correct answer <strong>${OPTS[q.ans]}</strong></span>
+      </div>`;
 
     return `
       <div class="answer-item ${statusClass}">
-        <div class="q-num">${statusIcon} Question ${i + 1}</div>
-        <div class="q-txt">${decodeHTML(q.text)}</div>
-        <div class="ans-row">
-          <span><strong>Correct:</strong> ${OPTS[q.ans]} — ${decodeHTML(q.opts[q.ans])}</span>
-          <span><strong>Your Answer:</strong> ${yourOpt}</span>
+        <div class="rv-header">
+          <span class="rv-qnum">${statusIcon} Question ${i + 1}</span>
+          <span class="rv-status-badge ${statusClass}-badge">${statusLabel}</span>
         </div>
+        <div class="q-txt">${decodeHTML(q.text)}</div>
+        <div class="rv-options">${opts}</div>
+        ${metaRow}
+        ${solutionBlock}
       </div>
     `;
   }).join("");
+
   renderMath(el);
 }

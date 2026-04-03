@@ -30,7 +30,19 @@ def init():
         conn.commit()
         print("Schema created successfully.")
     else:
-        print("Tables already exist — skipping schema init.")
+        print("Tables already exist — checking for missing columns ...")
+
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'questions' AND column_name = 'solution'
+        """)
+        if not cur.fetchone():
+            print("Adding missing 'solution' column to questions table ...")
+            cur.execute("ALTER TABLE questions ADD COLUMN solution TEXT DEFAULT NULL")
+            conn.commit()
+            print("Column added.")
+        else:
+            print("'solution' column already present.")
 
     cur.close()
     conn.close()

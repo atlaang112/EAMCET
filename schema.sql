@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS questions (
     option_d       TEXT NOT NULL,
     correct_option INT NOT NULL,
     difficulty     VARCHAR(30) NOT NULL,
+    solution       TEXT DEFAULT NULL,
     FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
 );
 
