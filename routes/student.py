@@ -202,7 +202,7 @@ def api_result_detail(result_id):
 
     cur.execute("""
         SELECT ra.question_no, ra.correct_answer, ra.student_answer, ra.status,
-               q.question_text, q.option_a, q.option_b, q.option_c, q.option_d
+               q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.difficulty, q.solution
         FROM result_answers ra
         JOIN questions q ON q.qno = ra.question_no
         WHERE ra.result_id=%s AND q.paper_id=%s

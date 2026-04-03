@@ -77,31 +77,105 @@ async function openStudentDetail(resultId) {
       <div class="stat-card orange"><div class="stat-num">${r.skipped}</div><div class="stat-label">Skipped</div></div>
       <div class="stat-card"><div class="stat-num ${pctClass}">${r.percentage}%</div><div class="stat-label">Score</div></div>
     </div>
-    <p style="font-size:0.85rem;color:var(--muted)">Subject: ${r.subject} &nbsp;|&nbsp; Date: ${r.datetime}</p>
+    <p style="font-size:0.85rem;color:var(--muted);margin-top:10px">Subject: ${r.subject} &nbsp;|&nbsp; Date: ${r.datetime}</p>
   `;
 
+  buildHistoryAnswerSheet(r.answers, resultId);
+}
+
+function buildHistoryAnswerSheet(answers, resultId) {
   const OPTS = ["A", "B", "C", "D"];
-  let answersHtml = "<hr style='margin:16px 0'><h3 style='margin-bottom:12px'>Your Answer Sheet</h3>";
+  const el = document.getElementById("student-detail-answers");
 
-  r.answers.forEach(a => {
-    const correctLabel = OPTS[parseInt(a.correct_answer)] || a.correct_answer;
-    const studentLabel = a.student_answer !== null ? (OPTS[parseInt(a.student_answer)] || a.student_answer) : null;
-    const statusClass = a.status === "correct" ? "correct-result" : a.status === "wrong" ? "wrong-result" : "skip-result";
-    const statusIcon = a.status === "correct" ? "✅" : a.status === "wrong" ? "❌" : "—";
+  let html = "<hr style='margin:16px 0'><h3 style='margin-bottom:16px'>📄 Answer Sheet</h3>";
 
-    answersHtml += `
-      <div class="answer-item ${statusClass}">
-        <div class="q-num">${statusIcon} Question ${a.question_no}</div>
-        <div class="q-txt">${a.question_text}</div>
-        <p class="q-opt">A) ${a.option_a} &nbsp; B) ${a.option_b} &nbsp; C) ${a.option_c} &nbsp; D) ${a.option_d}</p>
-        <div class="ans-row" style="margin-top:8px">
-          <span><strong>Correct:</strong> Option ${correctLabel}</span>
-          <span><strong>Your Answer:</strong> ${a.status === "skipped" ? "Skipped" : `Option ${studentLabel}`}</span>
-        </div>
+  html += answers.map((a, i) => {
+    const correctIdx = parseInt(a.correct_answer);
+    const studentIdx = a.student_answer !== null ? parseInt(a.student_answer) : null;
+    const isCorrect = a.status === "correct";
+    const isWrong   = a.status === "wrong";
+
+    const statusClass = isCorrect ? "correct-result" : isWrong ? "wrong-result" : "skip-result";
+    const statusIcon  = isCorrect ? "✅" : isWrong ? "❌" : "—";
+    const statusLabel = isCorrect ? "Correct" : isWrong ? "Wrong" : "Skipped";
+    const marksLabel  = isCorrect ? "2/2" : "0/2";
+    const diff        = a.difficulty || "";
+
+    const opts = [a.option_a, a.option_b, a.option_c, a.option_d].map((opt, oi) => {
+      let cls = "rv-option";
+      let icon = "";
+      if (oi === correctIdx) {
+        cls += " rv-correct";
+        icon = `<span class="rv-tick">✓</span>`;
+      } else if (studentIdx === oi && !isCorrect) {
+        cls += " rv-wrong";
+        icon = `<span class="rv-cross">✗</span>`;
+      }
+      return `<div class="${cls}">
+        <span class="rv-opt-label">${OPTS[oi]}</span>
+        <span class="rv-opt-text">${decodeHTML(opt)}</span>
+        ${icon}
       </div>`;
-  });
+    }).join("");
 
-  document.getElementById("student-detail-answers").innerHTML = answersHtml;
+    const hasSolution = a.solution && a.solution.trim().length > 0;
+    const uid = `h${resultId}_${i}`;
+    const solutionBlock = hasSolution ? `
+      <div class="solution-wrap">
+        <button class="solution-toggle-btn" id="solution-btn-${uid}" onclick="toggleHistorySolution('${uid}')">💡 View Solution</button>
+        <div class="solution-body" id="solution-body-${uid}" style="display:none">
+          <div class="solution-content">${decodeHTML(a.solution)}</div>
+        </div>
+      </div>` : "";
+
+    const metaRow = `
+      <div class="rv-meta">
+        <span>Status <strong>${statusLabel}</strong></span>
+        <span>Mark obtained <strong>${marksLabel}</strong></span>
+        ${diff ? `<span>Level <strong>${diff}</strong></span>` : ""}
+        ${studentIdx !== null ? `<span>Your answer <strong>${OPTS[studentIdx]}</strong></span>` : ""}
+        <span>Correct answer <strong>${OPTS[correctIdx]}</strong></span>
+      </div>`;
+
+    return `
+      <div class="answer-item ${statusClass}">
+        <div class="rv-header">
+          <span class="rv-qnum">${statusIcon} Question ${a.question_no}</span>
+          <span class="rv-status-badge ${statusClass}-badge">${statusLabel}</span>
+        </div>
+        <div class="q-txt">${decodeHTML(a.question_text)}</div>
+        <div class="rv-options">${opts}</div>
+        ${metaRow}
+        ${solutionBlock}
+      </div>`;
+  }).join("");
+
+  el.innerHTML = html;
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    MathJax.typesetPromise([el]).catch(err => console.warn("MathJax:", err));
+  }
+}
+
+function toggleHistorySolution(uid) {
+  const el = document.getElementById(`solution-body-${uid}`);
+  const btn = document.getElementById(`solution-btn-${uid}`);
+  if (!el) return;
+  const isOpen = el.style.display !== "none";
+  el.style.display = isOpen ? "none" : "block";
+  btn.textContent = isOpen ? "💡 View Solution" : "🔼 Hide Solution";
+  if (!isOpen && window.MathJax) {
+    MathJax.typesetPromise([el]).catch(e => console.warn(e));
+  }
+}
+
+function decodeHTML(str) {
+  if (!str) return "";
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 function closeStudentModal() {
